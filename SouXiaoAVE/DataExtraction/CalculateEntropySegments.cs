@@ -1,10 +1,12 @@
-﻿// Copyright (C) 2026 LinduCMint
+// Copyright (C) 2026 LinduCMint
 // This file is part of SouXiao AntiVirus Engine, licensed under MINT License.
 // See LICENSE file for full terms.
 // For production use or distribution, contact 3327867352@qq.com for authorization.
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 
 using SouXiaoAVE.Interfaces;
 
@@ -60,9 +62,5 @@ internal class CalculateEntropy : IDataExtraction
 
     public async Task<List<Single>> ExtractAsyns(String source) => await Task.Run(() => Extract(source));
 
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-    }
-
+    public void Dispose() => GC.SuppressFinalize(this);
 }

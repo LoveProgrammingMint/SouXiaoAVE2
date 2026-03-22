@@ -1,10 +1,12 @@
-﻿// Copyright (C) 2026 LinduCMint
+// Copyright (C) 2026 LinduCMint
 // This file is part of SouXiao AntiVirus Engine, licensed under MINT License.
 // See LICENSE file for full terms.
 // For production use or distribution, contact 3327867352@qq.com for authorization.
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 
 using SouXiaoAVE.Interfaces;
 
@@ -16,18 +18,16 @@ internal class ReadRawBytes : IDataExtraction
 
     public List<Single> Extract(String filePath)
     {
-        const int byteCount = 12288;
-        var result = new List<float>();
+        const Int32 byteCount = 12288;
+        List<Single> result = [];
 
-        using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+        using FileStream fs = new(filePath, FileMode.Open, FileAccess.Read);
+        Byte[] buffer = new Byte[byteCount];
+        Int32 bytesRead = fs.Read(buffer, 0, byteCount);
+
+        for (Int32 i = 0; i < bytesRead; i++)
         {
-            byte[] buffer = new byte[byteCount];
-            int bytesRead = fs.Read(buffer, 0, byteCount);
-
-            for (int i = 0; i < bytesRead; i++)
-            {
-                result.Add((float)buffer[i]);
-            }
+            result.Add((Single)buffer[i]);
         }
 
         return result;
@@ -35,9 +35,5 @@ internal class ReadRawBytes : IDataExtraction
 
     public async Task<List<Single>> ExtractAsyns(String source) => await Task.Run(() => Extract(source));
 
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-    }
-
+    public void Dispose() => GC.SuppressFinalize(this);
 }

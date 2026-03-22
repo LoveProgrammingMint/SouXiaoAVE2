@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Models\Enums\" />
+    <PackageReference Include="PeNet" Version="6.0.0" />
   </ItemGroup>
 
 </Project>
