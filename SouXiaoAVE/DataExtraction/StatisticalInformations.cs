@@ -18,7 +18,8 @@ namespace SouXiaoAVE.DataExtraction;
 
 internal class StatisticalInformations : IDataExtraction
 {
-    public String ExtractorName { get; set; } = "Raw Bytes";
+    public String ExtractorName { get; set; } = "Statistical Features";
+    public IDataPreprocessor? Preprocessor { get; set; }
 
     public List<Single> Extract(String filePath)
     {
@@ -254,7 +255,7 @@ internal class StatisticalInformations : IDataExtraction
         features.Add(loadConfigDir?.VirtualAddress != 0 ? 1 : 0);
         features.Add((Single)(pe.ImageNtHeaders?.OptionalHeader.DllCharacteristics ?? 0));
 
-        return features;
+        return Preprocessor?.Preprocess(features) ?? features;
     }
 
     private static String GetSectionName(ImageSectionHeader section) => section.Name ?? String.Empty;

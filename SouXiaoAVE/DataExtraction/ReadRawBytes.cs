@@ -5,7 +5,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
 
 using SouXiaoAVE.Interfaces;
@@ -15,6 +14,7 @@ namespace SouXiaoAVE.DataExtraction;
 internal class ReadRawBytes : IDataExtraction
 {
     public String ExtractorName { get; set; } = "Raw Bytes";
+    public IDataPreprocessor? Preprocessor { get; set; }
 
     public List<Single> Extract(String filePath)
     {
@@ -30,10 +30,10 @@ internal class ReadRawBytes : IDataExtraction
             result.Add((Single)buffer[i]);
         }
 
-        return result;
+        return Preprocessor?.Preprocess(result) ?? result;
     }
 
-    public async Task<List<Single>> ExtractAsyns(String source) => await Task.Run(() => Extract(source));
+    public async Task<List<Single>> ExtractAsync(String source) => await Task.Run(() => Extract(source));
 
     public void Dispose() => GC.SuppressFinalize(this);
 }

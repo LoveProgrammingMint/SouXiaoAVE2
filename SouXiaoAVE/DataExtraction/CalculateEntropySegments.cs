@@ -5,7 +5,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
 
 using SouXiaoAVE.Interfaces;
@@ -15,6 +14,7 @@ namespace SouXiaoAVE.DataExtraction;
 internal class CalculateEntropy : IDataExtraction
 {
     public String ExtractorName { get; set; } = "Entropy Map";
+    public IDataPreprocessor? Preprocessor { get; set; }
 
     public List<Single> Extract(String filePath)
     {
@@ -57,10 +57,10 @@ internal class CalculateEntropy : IDataExtraction
             entropies.Add(normalized);
         }
 
-        return entropies;
+        return Preprocessor?.Preprocess(entropies) ?? entropies;
     }
 
-    public async Task<List<Single>> ExtractAsyns(String source) => await Task.Run(() => Extract(source));
+    public async Task<List<Single>> ExtractAsync(String source) => await Task.Run(() => Extract(source));
 
     public void Dispose() => GC.SuppressFinalize(this);
 }
