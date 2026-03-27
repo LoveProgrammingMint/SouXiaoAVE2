@@ -5,18 +5,51 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 using SouXiaoAVE.DataExtraction;
 using SouXiaoAVE.DataProcessing;
 using SouXiaoAVE.Interfaces;
+using SouXiaoAVE.Linker.Enums;
+using SouXiaoAVE.Linker.Models;
+using SouXiaoAVE.Service;
 using SouXiaoAVE.Utils;
 
 namespace SouXiaoAVE;
 
 internal class Entry
 {
-    static void Main()
+    static async Task Main()
     {
+        Console.WriteLine("=== SouXiaoAVE TCP Connection Test ===");
+        Console.WriteLine();
+
+        Console.WriteLine("Starting Service Host...");
+        ScanServiceHost serviceHost = ScanServiceHost.Instance;
+
+        Boolean serviceStarted = serviceHost.Start();
+        Console.WriteLine($"Service Started: {serviceStarted}");
+        Console.WriteLine($"Service Port: {serviceHost.Port}");
+        Console.WriteLine();
+
+        Console.WriteLine("Starting Linker Service...");
+        ServiceResult startResult = Linker.Linker.StartService();
+        Console.WriteLine($"Linker Service Start Result: {startResult}");
+
+        await Task.Delay(500);
+
+        Console.WriteLine("Attempting to connect Linker to Service...");
+        Linker.Linker? linker = await Linker.Linker.LinkServiceAsync("localhost", 9527);
+
+        if (linker is null)
+        {
+            Console.WriteLine("Failed to connect to service!");
+            return;
+        }
+
+        Console.WriteLine($"Linker Connected: {linker.IsConnected}");
+        Console.WriteLine();
+
         String notepadPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "notepad.exe");
 
         if (!File.Exists(notepadPath))
@@ -25,75 +58,140 @@ internal class Entry
             return;
         }
 
-        Console.WriteLine($"Processing: {notepadPath}");
+        Console.WriteLine($"Test File: {notepadPath}");
         Console.WriteLine();
 
-        Console.WriteLine("=== ReadRawBytes ===");
-        using (ReadRawBytes rawBytesExtractor = new())
+        Console.WriteLine("=== Test 1: Single File Scan (Quick Mode) ===");
+        SXTask fileTask = linker.CreateTask(notepadPath, SXType.File);
+        Console.WriteLine($"Created Task: {fileTask.TaskId}");
+        Console.WriteLine($"Task Type: {fileTask.Type}");
+
+        Object sendResult = await linker.SendTaskAsync([fileTask]);
+
+        if (sendResult is Report quickReport)
         {
-            List<Single> rawBytes = rawBytesExtractor.Extract(notepadPath);
-            Console.WriteLine($"Extracted {rawBytes.Count} raw bytes");
-            Console.WriteLine($"First 10 values: {String.Join(", ", rawBytes.GetRange(0, Math.Min(10, rawBytes.Count)))}");
+            Console.WriteLine($"Quick Scan Result:");
+            Console.WriteLine($"  Task ID: {quickReport.TaskId}");
+            Console.WriteLine($"  File Path: {quickReport.FilePath}");
+            Console.WriteLine($"  Is Malicious: {quickReport.IsMalicious}");
+            Console.WriteLine($"  Confidence: {quickReport.Confidence:P}");
+            Console.WriteLine($"  Is Valid: {quickReport.IsValid}");
+        }
+        else if (sendResult is TaskID[] taskIds)
+        {
+            Console.WriteLine($"Tasks submitted: {taskIds.Length}");
+            Console.WriteLine($"Task ID: {taskIds[0]}");
+
+            Console.WriteLine("Waiting for task completion...");
+            Report report = await linker.WaitTaskAsync(taskIds[0]);
+            Console.WriteLine($"Report received:");
+            Console.WriteLine($"  Is Malicious: {report.IsMalicious}");
+            Console.WriteLine($"  Confidence: {report.Confidence:P}");
+        }
+        else if (sendResult is ServiceResult errorResult)
+        {
+            Console.WriteLine($"Error: {errorResult}");
         }
         Console.WriteLine();
 
-        Console.WriteLine("=== CalculateEntropy ===");
-        using (CalculateEntropy entropyExtractor = new())
-        {
-            List<Single> entropyValues = entropyExtractor.Extract(notepadPath);
-            Console.WriteLine($"Extracted {entropyValues.Count} entropy segments");
-            Console.WriteLine($"First 10 values: {String.Join(", ", entropyValues.GetRange(0, Math.Min(10, entropyValues.Count)))}");
-        }
-        Console.WriteLine();
+        Console.WriteLine("=== Test 2: Multiple Files Scan ===");
+        SXTask task1 = linker.CreateTask(notepadPath, SXType.File);
+        SXTask task2 = linker.CreateTask(notepadPath, SXType.File);
 
-        Console.WriteLine("=== StatisticalInformations ===");
-        using (StatisticalInformations statsExtractor = new())
-        {
-            List<Single> stats = statsExtractor.Extract(notepadPath);
-            Console.WriteLine($"Extracted {stats.Count} statistical features");
-            Console.WriteLine($"First 10 values: {String.Join(", ", stats.GetRange(0, Math.Min(10, stats.Count)))}");
-        }
-        Console.WriteLine();
+        Object multiResult = await linker.SendTaskAsync([task1, task2]);
 
-        Console.WriteLine("=== AssemblyArray ===");
-        try
+        if (multiResult is TaskID[] multiTaskIds)
         {
-            using (AssemblyArray assemblyExtractor = new())
+            Console.WriteLine($"Multiple tasks submitted: {multiTaskIds.Length}");
+
+            foreach (TaskID tid in multiTaskIds)
             {
-                List<Single> assemblyTokens = assemblyExtractor.Extract(notepadPath);
-                Console.WriteLine($"Extracted {assemblyTokens.Count} assembly tokens");
-                Console.WriteLine($"First 10 values: {String.Join(", ", assemblyTokens.GetRange(0, Math.Min(10, assemblyTokens.Count)))}");
+                SXTaskState state = await linker.GetTaskStateAsync(tid);
+                Console.WriteLine($"  Task {tid}: State = {state}");
             }
         }
-        catch (Exception ex)
+        Console.WriteLine();
+
+        Console.WriteLine("=== Test 3: Get Task State ===");
+        SXTaskState taskState = await linker.GetTaskStateAsync(fileTask.TaskId);
+        Console.WriteLine($"Task State: {taskState}");
+        Console.WriteLine();
+
+        Console.WriteLine("=== Test 4: Get Process Rate ===");
+        Double progress = await linker.GetProcessRateAsync(fileTask.TaskId);
+        Console.WriteLine($"Progress: {progress:P}");
+        Console.WriteLine();
+
+        Console.WriteLine("=== Test 5: Get Report ===");
+        Report? existingReport = await linker.GetReportAsync(fileTask.TaskId);
+        if (existingReport is not null)
         {
-            Console.WriteLine($"AssemblyArray extraction failed: {ex.Message}");
+            Console.WriteLine($"Report found:");
+            Console.WriteLine($"  File: {existingReport.FilePath}");
+            Console.WriteLine($"  Malicious: {existingReport.IsMalicious}");
+        }
+        else
+        {
+            Console.WriteLine("No report available yet");
         }
         Console.WriteLine();
 
-        Console.WriteLine("=== DataExtractor with Preprocessor ===");
-        using (DataExtractor extractor = new())
-        using (DataPreprocessor preprocessor = new())
-        {
-            extractor.SetExtractor(new StatisticalInformations());
-            extractor.SetPreprocessor(preprocessor);
+        Console.WriteLine("=== Test 6: Folder Scan ===");
+        String windowsPath = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        SXTask folderTask = linker.CreateTask(windowsPath, SXType.Folder);
+        Console.WriteLine($"Created Folder Task: {folderTask.TaskId}");
 
-            DataExtractionResult result = extractor.Extract(notepadPath);
-            Console.WriteLine($"Extractor: {result.ExtractorName}");
-            Console.WriteLine($"Feature Count: {result.FeatureCount}");
-            Console.WriteLine($"Is Valid: {result.IsValid}");
-            Console.WriteLine($"Extraction Time: {result.ExtractionTime}");
+        Object folderResult = await linker.SendTaskAsync([folderTask]);
+        if (folderResult is TaskID[] folderTaskIds)
+        {
+            Console.WriteLine($"Folder task submitted: {folderTaskIds[0]}");
+
+            for (Int32 i = 0; i < 3; i++)
+            {
+                await Task.Delay(100);
+                Double rate = await linker.GetProcessRateAsync(folderTaskIds[0]);
+                SXTaskState state = await linker.GetTaskStateAsync(folderTaskIds[0]);
+                Console.WriteLine($"  Progress: {rate:P}, State: {state}");
+            }
         }
         Console.WriteLine();
 
-        Console.WriteLine("=== Async Extraction ===");
-        using (ReadRawBytes asyncExtractor = new())
-        {
-            List<Single> asyncResult = asyncExtractor.ExtractAsync(notepadPath).Result;
-            Console.WriteLine($"Async extracted {asyncResult.Count} features");
-        }
+        Console.WriteLine("=== Test 7: Stop/Restart Task ===");
+        ServiceResult stopResult = await linker.StopTaskAsync(folderTask.TaskId);
+        Console.WriteLine($"Stop Task Result: {stopResult}");
+
+        SXTaskState stoppedState = await linker.GetTaskStateAsync(folderTask.TaskId);
+        Console.WriteLine($"State after stop: {stoppedState}");
+
+        ServiceResult restartResult = await linker.RestartTaskAsync(folderTask.TaskId);
+        Console.WriteLine($"Restart Task Result: {restartResult}");
+        Console.WriteLine();
+
+        Console.WriteLine("=== Test 8: Stop All / Release All ===");
+        ServiceResult stopAllResult = await linker.StopAllAsync();
+        Console.WriteLine($"Stop All Result: {stopAllResult}");
+
+        ServiceResult releaseAllResult = await linker.ReleaseAllAsync();
+        Console.WriteLine($"Release All Result: {releaseAllResult}");
+        Console.WriteLine();
+
+        Console.WriteLine("=== Test 9: Disconnect ===");
+        ServiceResult disconnectResult = await linker.DisconnectAsync();
+        Console.WriteLine($"Disconnect Result: {disconnectResult}");
+        Console.WriteLine($"Linker Connected: {linker.IsConnected}");
+        Console.WriteLine();
+
+        Console.WriteLine("Stopping Service...");
+        ServiceResult stopServiceResult = Linker.Linker.StopService();
+        Console.WriteLine($"Stop Service Result: {stopServiceResult}");
+
+        serviceHost.Stop();
+        Console.WriteLine("Service Host Stopped");
+
+        linker.Dispose();
+        serviceHost.Dispose();
 
         Console.WriteLine();
-        Console.WriteLine("All extractions completed successfully!");
+        Console.WriteLine("All tests completed successfully!");
     }
 }
