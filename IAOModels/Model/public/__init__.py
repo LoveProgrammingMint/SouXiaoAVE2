@@ -18,6 +18,12 @@ from .linear_attention import (
     LinearAttentionLayer,
 )
 from .lightgbm_wrapper import SXLightGBM
+from .lightweight import (
+    LightConvNeXtBlock,
+    ConvNeXtDownsampler,
+    count_parameters,
+    count_flops,
+)
 
 __all__ = [
     "Mamba3",
@@ -33,4 +39,8 @@ __all__ = [
     "FastLinearAttention",
     "LinearAttentionLayer",
     "SXLightGBM",
+    "LightConvNeXtBlock",
+    "ConvNeXtDownsampler",
+    "count_parameters",
+    "count_flops",
 ]

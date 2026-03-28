@@ -9,10 +9,10 @@ import torch.nn.functional as F
 from typing import Tuple
 
 
-class StatisticsClassifier(nn.Module):
+class CharWolfClassifier(nn.Module):
     def __init__(
         self,
-        input_dim: int = 128,
+        input_dim: int = 64,
         hidden_dim: int = 256,
         output_dim: int = 2,
         dropout: float = 0.3,

@@ -26,7 +26,7 @@ class AssemblyArrayMap(nn.Module):
         attn_num_heads: int = 4,
         attn_dim_head: int = 32,
         attn_dim_feedforward: int = 256,
-        classifier_hidden_dim: int = 128,
+        classifier_hidden_dim: int = 256,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
@@ -63,26 +63,26 @@ class AssemblyArrayMap(nn.Module):
         self,
         x: torch.Tensor,
         return_features: bool = False,
-    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = self.embedding(x)
 
         features = self.component(x)
 
-        logits = self.classifier(features)
+        logits, fc_features = self.classifier(features)
 
         if return_features:
-            return logits, features
-        return logits
+            return logits, fc_features, features
+        return logits, fc_features
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
-            logits = self.forward(x)
+            logits, _ = self.forward(x)
             predictions = torch.argmax(logits, dim=-1)
         return predictions
 
     def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
-            logits = self.forward(x)
+            logits, _ = self.forward(x)
             probabilities = F.softmax(logits, dim=-1)
         return probabilities
 
@@ -94,4 +94,5 @@ class AssemblyArrayMap(nn.Module):
 
     def from_bytes(self, byte_data: bytes) -> torch.Tensor:
         x = self.embedding.from_bytes(byte_data, self.input_size)
-        return self.forward(x)
+        logits, _ = self.forward(x)
+        return logits

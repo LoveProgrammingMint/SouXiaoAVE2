@@ -7,5 +7,6 @@ from .EntropyMap import EntropyMap
 from .RawBytesMap import RawBytesMap
 from .AssemblyArrayMap import AssemblyArrayMap
 from .StatisticsMap import StatisticsMap
+from .CharWolfMap import CharWolfMap
 
-__all__ = ["EntropyMap", "RawBytesMap", "AssemblyArrayMap", "StatisticsMap"]
+__all__ = ["EntropyMap", "RawBytesMap", "AssemblyArrayMap", "StatisticsMap", "CharWolfMap"]

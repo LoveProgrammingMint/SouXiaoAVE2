@@ -28,7 +28,7 @@ class StatisticsMap(nn.Module):
         num_transformer_layers: int = 2,
         transformer_nhead: int = 4,
         transformer_dim_feedforward: int = 256,
-        classifier_hidden_dim: int = 128,
+        classifier_hidden_dim: int = 256,
         dropout: float = 0.1,
         lgb_model_path: Optional[str] = None,
     ) -> None:
@@ -87,7 +87,7 @@ class StatisticsMap(nn.Module):
         x: torch.Tensor,
         return_features: bool = False,
         use_lgb: bool = True,
-    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if use_lgb:
             x = self.lgb(x)
 
@@ -95,21 +95,21 @@ class StatisticsMap(nn.Module):
 
         features = self.component(x)
 
-        logits = self.classifier(features)
+        logits, fc_features = self.classifier(features)
 
         if return_features:
-            return logits, features
-        return logits
+            return logits, fc_features, features
+        return logits, fc_features
 
     def predict(self, x: torch.Tensor, use_lgb: bool = True) -> torch.Tensor:
         with torch.no_grad():
-            logits = self.forward(x, use_lgb=use_lgb)
+            logits, _ = self.forward(x, use_lgb=use_lgb)
             predictions = torch.argmax(logits, dim=-1)
         return predictions
 
     def predict_proba(self, x: torch.Tensor, use_lgb: bool = True) -> torch.Tensor:
         with torch.no_grad():
-            logits = self.forward(x, use_lgb=use_lgb)
+            logits, _ = self.forward(x, use_lgb=use_lgb)
             probabilities = F.softmax(logits, dim=-1)
         return probabilities
 

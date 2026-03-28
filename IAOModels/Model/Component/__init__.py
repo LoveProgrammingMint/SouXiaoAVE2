@@ -3,9 +3,6 @@
 # See LICENSE file for full terms.
 # For production use or distribution, contact 3327867352@qq.com for authorization.
 
-from .EntropyComponent import EntropyComponent
-from .RawBytesComponent import RawBytesComponent
-from .AssemblyArrayComponent import AssemblyArrayComponent
-from .StatisticsComponent import StatisticsComponent
+from .MoERouter import MoERouter, MoELayer
 
-__all__ = ["EntropyComponent", "RawBytesComponent", "AssemblyArrayComponent", "StatisticsComponent"]
+__all__ = ["MoERouter", "MoELayer"]

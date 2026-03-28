@@ -6,6 +6,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Tuple
 
 
 class EntropyClassifier(nn.Module):
@@ -25,13 +26,13 @@ class EntropyClassifier(nn.Module):
         self.bn1 = nn.BatchNorm1d(hidden_dim)
         self.dropout1 = nn.Dropout(dropout)
 
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim // 2)
-        self.bn2 = nn.BatchNorm1d(hidden_dim // 2)
+        self.fc2 = nn.Linear(hidden_dim, 256)
+        self.bn2 = nn.BatchNorm1d(256)
         self.dropout2 = nn.Dropout(dropout)
 
-        self.fc3 = nn.Linear(hidden_dim // 2, output_dim)
+        self.fc3 = nn.Linear(256, output_dim)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         if x.dim() == 3:
             x = x.mean(dim=1)
 
@@ -45,6 +46,7 @@ class EntropyClassifier(nn.Module):
         x = F.gelu(x)
         x = self.dropout2(x)
 
-        x = self.fc3(x)
+        features = x
+        logits = self.fc3(features)
 
-        return x
+        return logits, features

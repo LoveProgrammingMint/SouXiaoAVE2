@@ -6,57 +6,57 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple
+from typing import Tuple
 
-from Model.Embedding.RawBytesEmbedding import RawBytesEmbedding
-from Model.Component.RawBytesComponent import RawBytesComponent
-from Model.Classifier.RawBytesClassifier import RawBytesClassifier
+from Model.Embedding.CharWolfEmbedding import CharWolfEmbedding
+from Model.Component.CharWolfComponent import CharWolfComponent
+from Model.Classifier.CharWolfClassifier import CharWolfClassifier
 
 
-class RawBytesMap(nn.Module):
+class CharWolfMap(nn.Module):
     def __init__(
         self,
-        height: int = 128,
-        width: int = 128,
+        input_size: int = 1024,
         embed_dim: int = 16,
         hidden_dim: int = 64,
         output_dim: int = 2,
-        num_layers: int = 5,
-        kernel_sizes: Tuple[int, int, int] = (9, 7, 5),
-        mlp_ratio: float = 4.0,
-        drop_path_rate: float = 0.1,
+        mamba_d_state: int = 32,
+        mamba_expand: int = 2,
+        mamba_headdim: int = 32,
+        attn_num_heads: int = 4,
+        attn_dim_head: int = 32,
+        attn_dim_feedforward: int = 128,
         classifier_hidden_dim: int = 256,
-        dropout: float = 0.3,
-        layer_scale_init_value: float = 1e-6,
+        dropout: float = 0.1,
     ) -> None:
         super().__init__()
-        self.height = height
-        self.width = width
+        self.input_size = input_size
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
 
-        self.embedding = RawBytesEmbedding(
+        self.embedding = CharWolfEmbedding(
+            input_size=input_size,
             embed_dim=embed_dim,
-            height=height,
-            width=width,
         )
 
-        self.component = RawBytesComponent(
-            in_channels=embed_dim,
+        self.component = CharWolfComponent(
+            embed_dim=embed_dim,
             hidden_dim=hidden_dim,
-            num_layers=num_layers,
-            kernel_sizes=kernel_sizes,
-            mlp_ratio=mlp_ratio,
-            drop_path_rate=drop_path_rate,
-            layer_scale_init_value=layer_scale_init_value,
+            mamba_d_state=mamba_d_state,
+            mamba_expand=mamba_expand,
+            mamba_headdim=mamba_headdim,
+            attn_num_heads=attn_num_heads,
+            attn_dim_head=attn_dim_head,
+            attn_dim_feedforward=attn_dim_feedforward,
+            dropout=dropout,
         )
 
-        self.classifier = RawBytesClassifier(
+        self.classifier = CharWolfClassifier(
             input_dim=hidden_dim,
             hidden_dim=classifier_hidden_dim,
             output_dim=output_dim,
-            dropout=dropout,
+            dropout=dropout * 2,
         )
 
     def forward(
@@ -92,13 +92,7 @@ class RawBytesMap(nn.Module):
             features = self.component(x)
         return features
 
-    def merge_branches(
-        self,
-        weights: Optional[Tuple[float, float, float]] = None,
-    ) -> None:
-        self.component.merge_branches(weights)
-
     def from_bytes(self, byte_data: bytes) -> torch.Tensor:
-        x = self.embedding.from_bytes(byte_data, self.height, self.width)
+        x = self.embedding.from_bytes(byte_data, self.input_size)
         logits, _ = self.forward(x)
         return logits
