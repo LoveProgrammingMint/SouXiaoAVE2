@@ -15,8 +15,8 @@ class RawBytesComponent(nn.Module):
     def __init__(
         self,
         in_channels: int = 16,
-        hidden_dim: int = 64,
-        num_layers: int = 5,
+        hidden_dim: int = 96,
+        num_layers: int = 4,
         kernel_sizes: Tuple[int, int, int] = (9, 7, 5),
         mlp_ratio: float = 4.0,
         drop_path_rate: float = 0.1,

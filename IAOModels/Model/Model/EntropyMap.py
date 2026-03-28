@@ -8,84 +8,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
 
-from Model.public.lightweight import LightConvNeXtBlock
-from Model.public.mamba3 import Mamba3, RMSNorm
-from Model.public.transformer import Transformer1DLayer
-
-
-class EntropyComponent(nn.Module):
-    def __init__(
-        self,
-        input_dim: int = 1024,
-        hidden_dim: int = 64,
-        num_conv_blocks: int = 2,
-        mamba_d_state: int = 16,
-        mamba_expand: int = 2,
-        mamba_headdim: int = 16,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-
-        self.input_proj = nn.Linear(input_dim, hidden_dim)
-
-        self.conv_blocks = nn.ModuleList([
-            LightConvNeXtBlock(hidden_dim) for _ in range(num_conv_blocks)
-        ])
-
-        self.downsample = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=4, stride=4, bias=False)
-
-        self.mamba = Mamba3(
-            d_model=hidden_dim,
-            d_state=mamba_d_state,
-            expand=mamba_expand,
-            headdim=mamba_headdim,
-            ngroups=1,
-            is_mimo=False,
-        )
-        self.norm = RMSNorm(hidden_dim)
-
-        self.transformer = Transformer1DLayer(
-            d_model=hidden_dim,
-            nhead=2,
-            dim_feedforward=hidden_dim * 2,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-
-        self.output_norm = nn.LayerNorm(hidden_dim)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.dim() == 2:
-            x = x.unsqueeze(1)
-
-        x = self.input_proj(x)
-
-        for block in self.conv_blocks:
-            x = block(x)
-
-        x = x.transpose(1, 2)
-        x = self.downsample(x)
-        x = x.transpose(1, 2)
-
-        residual = x
-        x = self.mamba(x)
-        x = self.norm(x + residual)
-
-        x = self.transformer(x)
-
-        x = self.output_norm(x)
-
-        return x
+from Model.Component.EntropyComponent import EntropyComponent
 
 
 class EntropyClassifier(nn.Module):
     def __init__(
         self,
-        input_dim: int = 64,
-        hidden_dim: int = 128,
+        input_dim: int = 128,
+        hidden_dim: int = 256,
         output_dim: int = 2,
         dropout: float = 0.2,
     ) -> None:
@@ -98,11 +28,11 @@ class EntropyClassifier(nn.Module):
         self.bn1 = nn.BatchNorm1d(hidden_dim)
         self.dropout1 = nn.Dropout(dropout)
 
-        self.fc2 = nn.Linear(hidden_dim, 256)
-        self.bn2 = nn.BatchNorm1d(256)
+        self.fc2 = nn.Linear(hidden_dim, 128)
+        self.bn2 = nn.BatchNorm1d(128)
         self.dropout2 = nn.Dropout(dropout)
 
-        self.fc3 = nn.Linear(256, output_dim)
+        self.fc3 = nn.Linear(128, output_dim)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         if x.dim() == 3:
@@ -128,12 +58,13 @@ class EntropyMap(nn.Module):
     def __init__(
         self,
         input_dim: int = 1024,
-        hidden_dim: int = 64,
+        hidden_dim: int = 128,
         output_dim: int = 2,
-        mamba_d_state: int = 16,
-        mamba_expand: int = 2,
-        mamba_headdim: int = 16,
-        classifier_hidden_dim: int = 128,
+        num_conv_blocks: int = 4,
+        num_transformer_layers: int = 2,
+        transformer_nhead: int = 4,
+        transformer_dim_feedforward: int = 256,
+        classifier_hidden_dim: int = 256,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
@@ -144,9 +75,10 @@ class EntropyMap(nn.Module):
         self.component = EntropyComponent(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
-            mamba_d_state=mamba_d_state,
-            mamba_expand=mamba_expand,
-            mamba_headdim=mamba_headdim,
+            num_conv_blocks=num_conv_blocks,
+            num_transformer_layers=num_transformer_layers,
+            transformer_nhead=transformer_nhead,
+            transformer_dim_feedforward=transformer_dim_feedforward,
             dropout=dropout,
         )
 

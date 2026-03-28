@@ -73,12 +73,17 @@ class ONNXExporter:
             return False
 
 
+def count_parameters(model: nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters())
+
+
 def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
     from Model.Model import (
         EntropyMap,
         RawBytesMap,
         StatisticsMap,
         CharWolfMap,
+        AssemblyArrayMap,
     )
     from Model.Model.IAOAVE2 import IAOAVE2
 
@@ -89,8 +94,17 @@ def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
     print("Exporting all models to ONNX format...")
     print("=" * 60)
 
-    print("\n[1/5] Exporting EntropyMap...")
-    model = EntropyMap(input_dim=1024, hidden_dim=512, output_dim=2)
+    print("\n[1/6] Exporting EntropyMap...")
+    model = EntropyMap(
+        input_dim=1024,
+        hidden_dim=128,
+        output_dim=2,
+        num_conv_blocks=4,
+        num_transformer_layers=2,
+        classifier_hidden_dim=256,
+    )
+    params = count_parameters(model)
+    print(f"  Parameters: {params:,} ({params/1e6:.2f}M)")
     dummy_input = torch.randn(1, 1024)
 
     class EntropyMapWrapper(nn.Module):
@@ -112,14 +126,25 @@ def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
     )
     results["EntropyMap"] = {
         "path": onnx_path,
+        "parameters": params,
         "input_shape": "(batch, 1024)",
         "output_shape": "logits: (batch, 2), fc_features: (batch, 256)",
         "verified": exporter.verify_onnx(onnx_path),
     }
     print(f"  Saved to: {onnx_path}")
 
-    print("\n[2/5] Exporting RawBytesMap...")
-    model = RawBytesMap(height=128, width=128, embed_dim=16, hidden_dim=64, output_dim=2)
+    print("\n[2/6] Exporting RawBytesMap...")
+    model = RawBytesMap(
+        height=128,
+        width=128,
+        embed_dim=16,
+        hidden_dim=96,
+        output_dim=2,
+        num_layers=4,
+        classifier_hidden_dim=256,
+    )
+    params = count_parameters(model)
+    print(f"  Parameters: {params:,} ({params/1e6:.2f}M)")
     dummy_input = torch.randint(0, 256, (1, 128, 128)).float()
 
     class RawBytesMapWrapper(nn.Module):
@@ -141,20 +166,65 @@ def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
     )
     results["RawBytesMap"] = {
         "path": onnx_path,
+        "parameters": params,
         "input_shape": "(batch, 128, 128) - int64",
         "output_shape": "logits: (batch, 2), fc_features: (batch, 256)",
         "verified": exporter.verify_onnx(onnx_path),
     }
     print(f"  Saved to: {onnx_path}")
 
-    print("\n[3/5] Exporting StatisticsMap...")
-    model = StatisticsMap(
-        lgb_input_dim=128,
-        lgb_output_dim=512,
-        embed_dim=64,
-        hidden_dim=128,
+    print("\n[3/6] Exporting AssemblyArrayMap...")
+    model = AssemblyArrayMap(
+        input_size=65536,
+        embed_dim=16,
+        hidden_dim=96,
         output_dim=2,
+        num_conv_blocks=3,
+        num_transformer_layers=2,
+        classifier_hidden_dim=256,
     )
+    params = count_parameters(model)
+    print(f"  Parameters: {params:,} ({params/1e6:.2f}M)")
+    dummy_input = torch.randint(0, 256, (1, 65536)).float()
+
+    class AssemblyArrayMapWrapper(nn.Module):
+        def __init__(self, model):
+            super().__init__()
+            self.model = model
+
+        def forward(self, x):
+            logits, features = self.model(x.long())
+            return logits, features
+
+    wrapped_model = AssemblyArrayMapWrapper(model)
+    onnx_path = exporter.export_model(
+        wrapped_model,
+        "AssemblyArrayMap",
+        dummy_input,
+        input_names=["input"],
+        output_names=["logits", "fc_features"],
+    )
+    results["AssemblyArrayMap"] = {
+        "path": onnx_path,
+        "parameters": params,
+        "input_shape": "(batch, 65536) - int64",
+        "output_shape": "logits: (batch, 2), fc_features: (batch, 256)",
+        "verified": exporter.verify_onnx(onnx_path),
+    }
+    print(f"  Saved to: {onnx_path}")
+
+    print("\n[4/6] Exporting StatisticsMap...")
+    model = StatisticsMap(
+        input_dim=512,
+        embed_dim=64,
+        hidden_dim=96,
+        output_dim=2,
+        num_conv_blocks=3,
+        num_layers=2,
+        classifier_hidden_dim=256,
+    )
+    params = count_parameters(model)
+    print(f"  Parameters: {params:,} ({params/1e6:.2f}M)")
     dummy_input = torch.randn(1, 512)
 
     class StatisticsMapWrapper(nn.Module):
@@ -163,7 +233,7 @@ def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
             self.model = model
 
         def forward(self, x):
-            logits, features = self.model(x, use_lgb=False)
+            logits, features = self.model(x)
             return logits, features
 
     wrapped_model = StatisticsMapWrapper(model)
@@ -176,14 +246,25 @@ def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
     )
     results["StatisticsMap"] = {
         "path": onnx_path,
+        "parameters": params,
         "input_shape": "(batch, 512) - after LGB preprocessing",
         "output_shape": "logits: (batch, 2), fc_features: (batch, 256)",
         "verified": exporter.verify_onnx(onnx_path),
     }
     print(f"  Saved to: {onnx_path}")
 
-    print("\n[4/5] Exporting CharWolfMap...")
-    model = CharWolfMap(input_size=1024, embed_dim=16, hidden_dim=64, output_dim=2)
+    print("\n[5/6] Exporting CharWolfMap...")
+    model = CharWolfMap(
+        input_size=1024,
+        embed_dim=16,
+        hidden_dim=96,
+        output_dim=2,
+        num_conv_blocks=3,
+        num_transformer_layers=2,
+        classifier_hidden_dim=256,
+    )
+    params = count_parameters(model)
+    print(f"  Parameters: {params:,} ({params/1e6:.2f}M)")
     dummy_input = torch.randint(0, 256, (1, 1024)).float()
 
     class CharWolfMapWrapper(nn.Module):
@@ -205,14 +286,27 @@ def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
     )
     results["CharWolfMap"] = {
         "path": onnx_path,
+        "parameters": params,
         "input_shape": "(batch, 1024) - int64",
         "output_shape": "logits: (batch, 2), fc_features: (batch, 256)",
         "verified": exporter.verify_onnx(onnx_path),
     }
     print(f"  Saved to: {onnx_path}")
 
-    print("\n[5/5] Exporting IAOAVE2...")
-    model = IAOAVE2(input_dim=1024, hidden_dim=256, output_dim=2, num_experts=4, top_k=2)
+    print("\n[6/6] Exporting IAOAVE2...")
+    model = IAOAVE2(
+        input_dim=1024,
+        hidden_dim=128,
+        output_dim=2,
+        num_conv_blocks=3,
+        num_transformer_layers=2,
+        num_experts=4,
+        top_k=2,
+        expert_hidden_dim=128,
+        expert_output_dim=128,
+    )
+    params = count_parameters(model)
+    print(f"  Parameters: {params:,} ({params/1e6:.2f}M)")
     dummy_input = torch.randn(1, 1024)
 
     class IAOAVE2Wrapper(nn.Module):
@@ -234,8 +328,9 @@ def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
     )
     results["IAOAVE2"] = {
         "path": onnx_path,
+        "parameters": params,
         "input_shape": "(batch, 1024)",
-        "output_shape": "logits: (batch, 2), fc_features: (batch, 256)",
+        "output_shape": "logits: (batch, 2), fc_features: (batch, 512)",
         "verified": exporter.verify_onnx(onnx_path),
     }
     print(f"  Saved to: {onnx_path}")
@@ -243,6 +338,15 @@ def export_all_models(output_dir: str = "./onnx_models") -> Dict[str, Any]:
     print("\n" + "=" * 60)
     print("Export completed!")
     print("=" * 60)
+
+    print("\nModel Summary:")
+    print("-" * 60)
+    print(f"{'Model':<20} {'Parameters':>15} {'Status':>10}")
+    print("-" * 60)
+    for name, info in results.items():
+        status = "OK" if info["verified"] else "FAILED"
+        print(f"{name:<20} {info['parameters']:>15,} {status:>10}")
+    print("-" * 60)
 
     return results
 
@@ -264,14 +368,17 @@ def get_model_info() -> str:
 | RawBytesMap       | (batch, 128, 128) | int64    | logits: (batch, 2)         |
 |                   |                   |          | fc_features: (batch, 256)  |
 |-------------------|-------------------|----------|----------------------------|
+| AssemblyArrayMap  | (batch, 65536)    | int64    | logits: (batch, 2)         |
+|                   |                   |          | fc_features: (batch, 256)  |
+|-------------------|-------------------|----------|----------------------------|
 | StatisticsMap     | (batch, 512)      | float32  | logits: (batch, 2)         |
-| (需先经LGB处理)    |                   |          | fc_features: (batch, 256)  |
+|                   |                   |          | fc_features: (batch, 256)  |
 |-------------------|-------------------|----------|----------------------------|
 | CharWolfMap       | (batch, 1024)     | int64    | logits: (batch, 2)         |
 |                   |                   |          | fc_features: (batch, 256)  |
 |-------------------|-------------------|----------|----------------------------|
 | IAOAVE2           | (batch, 1024)     | float32  | logits: (batch, 2)         |
-| (MoE混合专家模型)  |                   |          | fc_features: (batch, 256)  |
+| (MoE混合专家模型)  |                   |          | fc_features: (batch, 512)  |
 --------------------------------------------------------------------------------
 
 二、输出说明
@@ -282,7 +389,7 @@ def get_model_info() -> str:
    - index 1: 恶意样本得分
    - 使用 softmax 获取概率: prob = softmax(logits, dim=-1)
 
-2. fc_features: (batch, 256)
+2. fc_features: (batch, 256/512)
    - FC层中间表示
    - 可用于特征融合、集成学习等
 
@@ -310,16 +417,11 @@ print(f"Prediction: {'Malicious' if prediction[0] == 1 else 'Benign'}")
 
 四、注意事项
 --------------------------------------------------------------------------------
-1. StatisticsMap 需要先经过 LightGBM 预处理:
-   - 原始输入: (batch, 128) 统计特征
-   - LGB输出: (batch, 512) 树叶特征
-   - ONNX输入: LGB的输出
-
-2. 整数输入模型 (RawBytesMap, CharWolfMap):
+1. 整数输入模型 (RawBytesMap, AssemblyArrayMap, CharWolfMap):
    - 输入必须是 int64 类型
    - 值范围: 0-255 (字节值)
 
-3. 动态批处理:
+2. 动态批处理:
    - 所有模型支持动态 batch_size
    - 推理时可使用任意 batch 大小
 
@@ -327,6 +429,7 @@ print(f"Prediction: {'Malicious' if prediction[0] == 1 else 'Benign'}")
 --------------------------------------------------------------------------------
 - EntropyMap.onnx
 - RawBytesMap.onnx
+- AssemblyArrayMap.onnx
 - StatisticsMap.onnx
 - CharWolfMap.onnx
 - IAOAVE2.onnx
@@ -361,5 +464,5 @@ if __name__ == "__main__":
         print("\nExport Summary:")
         print("-" * 60)
         for name, info in results.items():
-            status = "✓" if info["verified"] else "✗"
-            print(f"{status} {name}: {info['path']}")
+            status = "OK" if info["verified"] else "FAILED"
+            print(f"[{status}] {name}: {info['path']}")

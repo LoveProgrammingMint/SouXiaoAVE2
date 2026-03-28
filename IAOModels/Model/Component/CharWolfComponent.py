@@ -6,21 +6,43 @@
 import torch
 import torch.nn as nn
 
-from Model.public.mamba3 import Mamba3, RMSNorm
+from Model.public.transformer import Transformer1DLayer
 from Model.public.linear_attention import LinearAttentionLayer
+
+
+class ConvBlock1D(nn.Module):
+    def __init__(self, hidden_dim: int, expansion: int = 4):
+        super().__init__()
+        self.dwconv = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=7, padding=3, groups=hidden_dim, bias=False)
+        self.norm = nn.LayerNorm(hidden_dim)
+        self.pwconv1 = nn.Linear(hidden_dim, hidden_dim * expansion)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(hidden_dim * expansion, hidden_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        x = self.dwconv(x)
+        x = x.transpose(1, 2)
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        x = x.transpose(1, 2)
+        return x + residual
 
 
 class CharWolfComponent(nn.Module):
     def __init__(
         self,
         embed_dim: int = 16,
-        hidden_dim: int = 64,
-        mamba_d_state: int = 32,
-        mamba_expand: int = 2,
-        mamba_headdim: int = 32,
+        hidden_dim: int = 96,
+        num_conv_blocks: int = 3,
+        num_transformer_layers: int = 2,
+        transformer_nhead: int = 4,
+        transformer_dim_feedforward: int = 192,
         attn_num_heads: int = 4,
-        attn_dim_head: int = 32,
-        attn_dim_feedforward: int = 128,
+        attn_dim_head: int = 24,
+        attn_dim_feedforward: int = 192,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
@@ -29,25 +51,9 @@ class CharWolfComponent(nn.Module):
 
         self.input_proj = nn.Linear(embed_dim, hidden_dim)
 
-        self.mamba1 = Mamba3(
-            d_model=hidden_dim,
-            d_state=mamba_d_state,
-            expand=mamba_expand,
-            headdim=mamba_headdim,
-            ngroups=1,
-            is_mimo=False,
-        )
-        self.norm1 = RMSNorm(hidden_dim)
-
-        self.mamba2 = Mamba3(
-            d_model=hidden_dim,
-            d_state=mamba_d_state,
-            expand=mamba_expand,
-            headdim=mamba_headdim,
-            ngroups=1,
-            is_mimo=False,
-        )
-        self.norm2 = RMSNorm(hidden_dim)
+        self.conv_blocks = nn.ModuleList([
+            ConvBlock1D(hidden_dim, expansion=4) for _ in range(num_conv_blocks)
+        ])
 
         self.downsample1 = nn.Conv1d(
             in_channels=hidden_dim,
@@ -58,15 +64,17 @@ class CharWolfComponent(nn.Module):
             bias=False,
         )
 
-        self.mamba3 = Mamba3(
-            d_model=hidden_dim,
-            d_state=mamba_d_state,
-            expand=mamba_expand,
-            headdim=mamba_headdim,
-            ngroups=1,
-            is_mimo=False,
-        )
-        self.norm3 = RMSNorm(hidden_dim)
+        self.transformer_layers1 = nn.ModuleList([
+            Transformer1DLayer(
+                d_model=hidden_dim,
+                nhead=transformer_nhead,
+                dim_feedforward=transformer_dim_feedforward,
+                dropout=dropout,
+                activation="gelu",
+                batch_first=True,
+            )
+            for _ in range(num_transformer_layers)
+        ])
 
         self.downsample2 = nn.Conv1d(
             in_channels=hidden_dim,
@@ -92,21 +100,17 @@ class CharWolfComponent(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.input_proj(x)
 
-        residual = x
-        x = self.mamba1(x)
-        x = self.norm1(x + residual)
+        x = x.transpose(1, 2)
+        for block in self.conv_blocks:
+            x = block(x)
+        x = x.transpose(1, 2)
 
-        residual = x
-        x = self.mamba2(x)
-        x = self.norm2(x + residual)
+        for layer in self.transformer_layers1:
+            x = layer(x)
 
         x = x.transpose(1, 2)
         x = self.downsample1(x)
         x = x.transpose(1, 2)
-
-        residual = x
-        x = self.mamba3(x)
-        x = self.norm3(x + residual)
 
         x = x.transpose(1, 2)
         x = self.downsample2(x)

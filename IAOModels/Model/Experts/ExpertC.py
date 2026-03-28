@@ -7,19 +7,18 @@ import torch
 import torch.nn as nn
 from typing import Tuple
 
-from Model.public.mamba3 import Mamba3, RMSNorm
+from Model.public.transformer import Transformer1DLayer
 
 
 class ExpertC(nn.Module):
     def __init__(
         self,
-        input_dim: int = 1024,
-        hidden_dim: int = 256,
-        output_dim: int = 256,
+        input_dim: int = 128,
+        hidden_dim: int = 128,
+        output_dim: int = 128,
         num_layers: int = 2,
-        mamba_d_state: int = 32,
-        mamba_expand: int = 2,
-        mamba_headdim: int = 32,
+        num_heads: int = 4,
+        dim_feedforward: int = 256,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
@@ -29,21 +28,17 @@ class ExpertC(nn.Module):
 
         self.input_proj = nn.Linear(input_dim, hidden_dim)
 
-        self.mamba_layers = nn.ModuleList()
-        self.norms = nn.ModuleList()
-
-        for _ in range(num_layers):
-            self.mamba_layers.append(
-                Mamba3(
-                    d_model=hidden_dim,
-                    d_state=mamba_d_state,
-                    expand=mamba_expand,
-                    headdim=mamba_headdim,
-                    ngroups=1,
-                    is_mimo=False,
-                )
+        self.transformer_layers = nn.ModuleList([
+            Transformer1DLayer(
+                d_model=hidden_dim,
+                nhead=num_heads,
+                dim_feedforward=dim_feedforward,
+                dropout=dropout,
+                activation="gelu",
+                batch_first=True,
             )
-            self.norms.append(RMSNorm(hidden_dim))
+            for _ in range(num_layers)
+        ])
 
         self.mlp = nn.Sequential(
             nn.LayerNorm(hidden_dim),
@@ -61,10 +56,8 @@ class ExpertC(nn.Module):
 
         x = self.input_proj(x)
 
-        for mamba, norm in zip(self.mamba_layers, self.norms):
-            residual = x
-            x = mamba(x)
-            x = norm(x + residual)
+        for layer in self.transformer_layers:
+            x = layer(x)
 
         x = self.mlp(x)
 

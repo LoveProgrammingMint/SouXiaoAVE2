@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
 
-from Model.public.mamba3 import Mamba3, RMSNorm
 from Model.public.transformer import Transformer1DLayer
 from Model.Component.MoERouter import MoERouter
 from Model.Experts.ExpertA import ExpertA
@@ -17,21 +16,41 @@ from Model.Experts.ExpertC import ExpertC
 from Model.Experts.ExpertD import ExpertD
 
 
+class ConvBlock1D(nn.Module):
+    def __init__(self, hidden_dim: int, expansion: int = 4):
+        super().__init__()
+        self.dwconv = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=7, padding=3, groups=hidden_dim, bias=False)
+        self.norm = nn.LayerNorm(hidden_dim)
+        self.pwconv1 = nn.Linear(hidden_dim, hidden_dim * expansion)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(hidden_dim * expansion, hidden_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        x = self.dwconv(x)
+        x = x.transpose(1, 2)
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        x = x.transpose(1, 2)
+        return x + residual
+
+
 class IAOAVE2(nn.Module):
     def __init__(
         self,
         input_dim: int = 1024,
-        hidden_dim: int = 256,
+        hidden_dim: int = 128,
         output_dim: int = 2,
-        mamba_d_state: int = 32,
-        mamba_expand: int = 2,
-        mamba_headdim: int = 32,
+        num_conv_blocks: int = 3,
+        num_transformer_layers: int = 2,
         transformer_nhead: int = 4,
-        transformer_dim_feedforward: int = 512,
+        transformer_dim_feedforward: int = 256,
         num_experts: int = 4,
         top_k: int = 2,
-        expert_hidden_dim: int = 256,
-        expert_output_dim: int = 256,
+        expert_hidden_dim: int = 128,
+        expert_output_dim: int = 128,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
@@ -43,24 +62,21 @@ class IAOAVE2(nn.Module):
 
         self.input_proj = nn.Linear(input_dim, hidden_dim)
 
-        self.mamba = Mamba3(
-            d_model=hidden_dim,
-            d_state=mamba_d_state,
-            expand=mamba_expand,
-            headdim=mamba_headdim,
-            ngroups=1,
-            is_mimo=False,
-        )
-        self.mamba_norm = RMSNorm(hidden_dim)
+        self.conv_blocks = nn.ModuleList([
+            ConvBlock1D(hidden_dim, expansion=4) for _ in range(num_conv_blocks)
+        ])
 
-        self.transformer = Transformer1DLayer(
-            d_model=hidden_dim,
-            nhead=transformer_nhead,
-            dim_feedforward=transformer_dim_feedforward,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
+        self.transformer_layers = nn.ModuleList([
+            Transformer1DLayer(
+                d_model=hidden_dim,
+                nhead=transformer_nhead,
+                dim_feedforward=transformer_dim_feedforward,
+                dropout=dropout,
+                activation="gelu",
+                batch_first=True,
+            )
+            for _ in range(num_transformer_layers)
+        ])
 
         self.router = MoERouter(
             input_dim=hidden_dim,
@@ -93,18 +109,20 @@ class IAOAVE2(nn.Module):
 
         x = self.input_proj(x)
 
-        residual = x
-        x = self.mamba(x)
-        x = self.mamba_norm(x + residual)
+        x = x.transpose(1, 2)
+        for block in self.conv_blocks:
+            x = block(x)
+        x = x.transpose(1, 2)
 
-        x = self.transformer(x)
+        for layer in self.transformer_layers:
+            x = layer(x)
 
         if x.dim() == 3:
             x_pooled = x.mean(dim=1)
         else:
             x_pooled = x
 
-        top_k_indices, top_k_weights, _ = self.router(x_pooled)
+        _, _, full_weights = self.router(x_pooled)
 
         batch_size = x_pooled.shape[0]
         expert_outputs = torch.zeros(
@@ -112,19 +130,12 @@ class IAOAVE2(nn.Module):
             device=x.device, dtype=x.dtype
         )
 
-        for i in range(self.top_k):
-            expert_idx_batch = top_k_indices[:, i]
-            weights_batch = top_k_weights[:, i]
-
-            for expert_idx in range(self.num_experts):
-                mask = expert_idx_batch == expert_idx
-                if mask.sum() > 0:
-                    expert_input = x[mask]
-                    expert_out = self.experts[expert_idx](expert_input)
-                    if expert_out.dim() == 3:
-                        expert_out = expert_out.mean(dim=1)
-                    weighted_out = expert_out * weights_batch[mask].unsqueeze(-1)
-                    expert_outputs[mask] += weighted_out
+        for expert_idx in range(self.num_experts):
+            expert_out = self.experts[expert_idx](x)
+            if expert_out.dim() == 3:
+                expert_out = expert_out.mean(dim=1)
+            weight = full_weights[:, expert_idx:expert_idx+1]
+            expert_outputs = expert_outputs + expert_out * weight
 
         x = self.fc1(expert_outputs)
         x = self.bn1(x)
@@ -158,10 +169,14 @@ class IAOAVE2(nn.Module):
                 x = x.unsqueeze(1)
 
             x = self.input_proj(x)
-            residual = x
-            x = self.mamba(x)
-            x = self.mamba_norm(x + residual)
-            x = self.transformer(x)
+
+            x = x.transpose(1, 2)
+            for block in self.conv_blocks:
+                x = block(x)
+            x = x.transpose(1, 2)
+
+            for layer in self.transformer_layers:
+                x = layer(x)
 
             if x.dim() == 3:
                 x = x.mean(dim=1)

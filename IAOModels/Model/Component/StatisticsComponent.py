@@ -10,14 +10,36 @@ import torch.nn.functional as F
 from Model.public.transformer import Transformer1DLayer
 
 
+class ConvBlock1D(nn.Module):
+    def __init__(self, hidden_dim: int, expansion: int = 4):
+        super().__init__()
+        self.dwconv = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=7, padding=3, groups=hidden_dim, bias=False)
+        self.norm = nn.LayerNorm(hidden_dim)
+        self.pwconv1 = nn.Linear(hidden_dim, hidden_dim * expansion)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(hidden_dim * expansion, hidden_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        x = self.dwconv(x)
+        x = x.transpose(1, 2)
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        x = x.transpose(1, 2)
+        return x + residual
+
+
 class StatisticsComponent(nn.Module):
     def __init__(
         self,
         embed_dim: int = 64,
-        hidden_dim: int = 128,
+        hidden_dim: int = 96,
+        num_conv_blocks: int = 3,
         num_layers: int = 2,
         transformer_nhead: int = 4,
-        transformer_dim_feedforward: int = 256,
+        transformer_dim_feedforward: int = 192,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
@@ -26,6 +48,10 @@ class StatisticsComponent(nn.Module):
         self.num_layers = num_layers
 
         self.input_proj = nn.Linear(embed_dim, hidden_dim)
+
+        self.conv_blocks = nn.ModuleList([
+            ConvBlock1D(hidden_dim, expansion=4) for _ in range(num_conv_blocks)
+        ])
 
         self.transformer_layers = nn.ModuleList([
             Transformer1DLayer(
@@ -43,6 +69,11 @@ class StatisticsComponent(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.input_proj(x)
+
+        x = x.transpose(1, 2)
+        for block in self.conv_blocks:
+            x = block(x)
+        x = x.transpose(1, 2)
 
         for layer in self.transformer_layers:
             x = layer(x)
