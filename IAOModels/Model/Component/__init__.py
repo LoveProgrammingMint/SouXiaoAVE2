@@ -3,3 +3,8 @@
 # See LICENSE file for full terms.
 # For production use or distribution, contact 3327867352@qq.com for authorization.
 
+from .EntropyComponent import EntropyComponent
+from .RawBytesComponent import RawBytesComponent
+from .AssemblyArrayComponent import AssemblyArrayComponent
+
+__all__ = ["EntropyComponent", "RawBytesComponent", "AssemblyArrayComponent"]

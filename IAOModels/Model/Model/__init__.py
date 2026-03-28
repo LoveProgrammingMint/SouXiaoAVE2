@@ -3,3 +3,8 @@
 # See LICENSE file for full terms.
 # For production use or distribution, contact 3327867352@qq.com for authorization.
 
+from .EntropyMap import EntropyMap
+from .RawBytesMap import RawBytesMap
+from .AssemblyArrayMap import AssemblyArrayMap
+
+__all__ = ["EntropyMap", "RawBytesMap", "AssemblyArrayMap"]

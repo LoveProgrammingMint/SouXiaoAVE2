@@ -3,3 +3,8 @@
 # See LICENSE file for full terms.
 # For production use or distribution, contact 3327867352@qq.com for authorization.
 
+from .EntropyClassifier import EntropyClassifier
+from .RawBytesClassifier import RawBytesClassifier
+from .AssemblyArrayClassifier import AssemblyArrayClassifier
+
+__all__ = ["EntropyClassifier", "RawBytesClassifier", "AssemblyArrayClassifier"]
