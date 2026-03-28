@@ -17,6 +17,7 @@ from .linear_attention import (
     FastLinearAttention,
     LinearAttentionLayer,
 )
+from .lightgbm_wrapper import SXLightGBM
 
 __all__ = [
     "Mamba3",
@@ -31,4 +32,5 @@ __all__ = [
     "LinearAttention",
     "FastLinearAttention",
     "LinearAttentionLayer",
+    "SXLightGBM",
 ]

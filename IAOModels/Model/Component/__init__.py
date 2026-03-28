@@ -6,5 +6,6 @@
 from .EntropyComponent import EntropyComponent
 from .RawBytesComponent import RawBytesComponent
 from .AssemblyArrayComponent import AssemblyArrayComponent
+from .StatisticsComponent import StatisticsComponent
 
-__all__ = ["EntropyComponent", "RawBytesComponent", "AssemblyArrayComponent"]
+__all__ = ["EntropyComponent", "RawBytesComponent", "AssemblyArrayComponent", "StatisticsComponent"]

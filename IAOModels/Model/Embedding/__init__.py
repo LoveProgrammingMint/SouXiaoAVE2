@@ -5,5 +5,6 @@
 
 from .RawBytesEmbedding import RawBytesEmbedding
 from .AssemblyArrayEmbedding import AssemblyArrayEmbedding
+from .StatisticsEmbedding import StatisticsEmbedding
 
-__all__ = ["RawBytesEmbedding", "AssemblyArrayEmbedding"]
+__all__ = ["RawBytesEmbedding", "AssemblyArrayEmbedding", "StatisticsEmbedding"]

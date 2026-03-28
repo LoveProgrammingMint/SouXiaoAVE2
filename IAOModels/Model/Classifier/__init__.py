@@ -6,5 +6,6 @@
 from .EntropyClassifier import EntropyClassifier
 from .RawBytesClassifier import RawBytesClassifier
 from .AssemblyArrayClassifier import AssemblyArrayClassifier
+from .StatisticsClassifier import StatisticsClassifier
 
-__all__ = ["EntropyClassifier", "RawBytesClassifier", "AssemblyArrayClassifier"]
+__all__ = ["EntropyClassifier", "RawBytesClassifier", "AssemblyArrayClassifier", "StatisticsClassifier"]
