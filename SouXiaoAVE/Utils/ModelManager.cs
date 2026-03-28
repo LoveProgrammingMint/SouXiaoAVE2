@@ -4,7 +4,6 @@
 // For production use or distribution, contact 3327867352@qq.com for authorization.
 using System;
 using System.Collections.Generic;
-
 using Microsoft.ML.OnnxRuntime;
 
 using SouXiaoAVE.Model;
@@ -14,10 +13,10 @@ namespace SouXiaoAVE.Utils;
 public sealed class ModelManager : IDisposable
 {
     private static ModelManager? _instance;
-    private static readonly Object _lock = new();
+    private static readonly Lock _lock = new();
 
     private Boolean _disposed = false;
-    private readonly Dictionary<Int32, String> _modelPaths = new();
+    private readonly Dictionary<Int32, String> _modelPaths = [];
 
     public static ModelManager Instance
     {

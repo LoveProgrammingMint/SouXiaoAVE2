@@ -5,15 +5,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
 using Microsoft.ML.OnnxRuntime;
 
 namespace SouXiaoAVE.Model;
 
 public sealed class ModelLoader
 {
-    private static readonly Object _lock = new();
-    private static readonly Dictionary<Int32, Dictionary<String, InferenceSession>> _modelCache = new();
+    private static readonly Lock _lock = new();
+    private static readonly Dictionary<Int32, Dictionary<String, InferenceSession>> _modelCache = [];
 
     public static ModelLoader Instance { get; } = new ModelLoader();
 
@@ -33,13 +32,13 @@ public sealed class ModelLoader
 
         lock (_lock)
         {
-        if (!_modelCache.ContainsKey(id))
+        if (!_modelCache.TryGetValue(id, out Dictionary<string, InferenceSession>? modelDict))
         {
-            _modelCache[id] = new Dictionary<String, InferenceSession>();
+                modelDict = [];
+                _modelCache[id] = modelDict;
         }
 
-        Dictionary<String, InferenceSession> modelDict = _modelCache[id];
-        String[] onnxFiles = Directory.GetFiles(path, "*.onnx");
+            String[] onnxFiles = Directory.GetFiles(path, "*.onnx");
 
         foreach (String filePath in onnxFiles)
         {
@@ -47,7 +46,7 @@ public sealed class ModelLoader
 
             if (!modelDict.ContainsKey(modelName))
             {
-                InferenceSession session = new InferenceSession(filePath);
+                InferenceSession session = new(filePath);
                 modelDict[modelName] = session;
             }
         }
@@ -105,7 +104,7 @@ public sealed class ModelLoader
             {
                 return modelDict.Keys;
             }
-            return Array.Empty<String>();
+            return [];
         }
     }
 
