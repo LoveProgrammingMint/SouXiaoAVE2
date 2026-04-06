@@ -19,6 +19,8 @@
   <ItemGroup>
     <ProjectReference Include="..\SXAVELinker\SXAVELinker.csproj" />
     <ProjectReference Include="..\ZeroZone\ZeroZone.csproj" />
+    <ProjectReference Include="..\ZeroProcess\ZeroProcess.csproj" />
+    <ProjectReference Include="..\ZeroRegistry\ZeroRegistry.csproj" />
   </ItemGroup>
 
 </Project>

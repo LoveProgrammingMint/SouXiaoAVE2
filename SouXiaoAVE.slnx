@@ -2,4 +2,6 @@
   <Project Path="SXAVELinker/SXAVELinker.csproj" />
   <Project Path="SouXiaoAVE/SouXiaoAVE.csproj" />
   <Project Path="ZeroZone/ZeroZone.csproj" />
+  <Project Path="ZeroProcess/ZeroProcess.csproj" />
+  <Project Path="ZeroRegistry/ZeroRegistry.csproj" />
 </Solution>
