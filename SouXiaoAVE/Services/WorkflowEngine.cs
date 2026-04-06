@@ -5,6 +5,7 @@
 using SouXiaoAVE.Models;
 using SXAVELinker;
 using System.Text.Json;
+using ZeroZone;
 
 namespace SouXiaoAVE.Services;
 
@@ -13,6 +14,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
     private readonly SXLinker _linker;
     private readonly Dictionary<String, Func<SXTask, CancellationToken, Task<SXReport>>> _functions;
     private readonly LightGbmPredictor _predictor;
+    private readonly IsolationService _isolationService;
     private Boolean _disposed;
 
     public SXLinker Linker => _linker;
@@ -26,6 +28,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         _linker = new SXLinker();
         _functions = new Dictionary<String, Func<SXTask, CancellationToken, Task<SXReport>>>();
         _predictor = new LightGbmPredictor(512);
+        _isolationService = new IsolationService();
 
         RegisterDefaultFunctions();
     }
@@ -36,6 +39,8 @@ public sealed class WorkflowEngine : IAsyncDisposable
         RegisterFunction("ExtractFeatures", ExtractFeaturesAsync);
         RegisterFunction("PredictMalware", PredictMalwareAsync);
         RegisterFunction("GenerateReport", GenerateReportAsync);
+        RegisterFunction("IsolateFile", IsolateFileAsync);
+        RegisterFunction("RestoreFile", RestoreFileAsync);
     }
 
     public void RegisterFunction(String name, Func<SXTask, CancellationToken, Task<SXReport>> func)
@@ -253,6 +258,94 @@ public sealed class WorkflowEngine : IAsyncDisposable
         return report;
     }
 
+    private async Task<SXReport> IsolateFileAsync(SXTask task, CancellationToken cancellationToken)
+    {
+        SXReport report = new(task.ID, task.Name);
+
+        try
+        {
+            String? inputPath = task.GetParameter<String>("inputPath");
+            if (String.IsNullOrEmpty(inputPath))
+            {
+                report.SetFailure("Input path is required");
+                return report;
+            }
+
+            String? outputPath = task.GetParameter<String>("outputPath");
+            String? password = task.GetParameter<String>("password");
+
+            IsolationResult result = await _isolationService.ImportAsync(inputPath, outputPath, password);
+
+            if (result.Success)
+            {
+                task.SetParameter("IsolatedPath", result.OutputPath ?? "");
+                task.SetParameter("EncryptedBytes", result.EncryptedBytes);
+                task.SetParameter("IsolationPassword", result.Password ?? "");
+
+                report.AddResult("IsolatedPath", result.OutputPath ?? "");
+                report.AddResult("EncryptedBytes", result.EncryptedBytes);
+                report.AddResult("Password", result.Password ?? "");
+                report.AddInfo($"File isolated to: {result.OutputPath}");
+                report.SetSuccess();
+            }
+            else
+            {
+                report.SetFailure(result.ErrorMessage ?? "Isolation failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            report.SetFailure(ex.Message);
+        }
+
+        await Task.CompletedTask;
+        return report;
+    }
+
+    private async Task<SXReport> RestoreFileAsync(SXTask task, CancellationToken cancellationToken)
+    {
+        SXReport report = new(task.ID, task.Name);
+
+        try
+        {
+            String? inputPath = task.GetParameter<String>("inputPath");
+            if (String.IsNullOrEmpty(inputPath))
+            {
+                report.SetFailure("Input path is required");
+                return report;
+            }
+
+            String? outputDir = task.GetParameter<String>("outputDir");
+            String? password = task.GetParameter<String>("password");
+
+            ExtractionResult result = await _isolationService.ExportAsync(inputPath, outputDir, password);
+
+            if (result.Success)
+            {
+                task.SetParameter("RestoredDirectory", result.OutputDirectory ?? "");
+                task.SetParameter("RestoredFileCount", result.FileCount);
+                task.SetParameter("ExtractedBytes", result.ExtractedBytes);
+
+                report.AddResult("RestoredDirectory", result.OutputDirectory ?? "");
+                report.AddResult("RestoredFileCount", result.FileCount);
+                report.AddResult("ExtractedBytes", result.ExtractedBytes);
+                report.AddInfo($"Files restored to: {result.OutputDirectory}");
+                report.SetSuccess();
+            }
+            else
+            {
+                report.SetFailure(result.ErrorMessage ?? "Restoration failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            report.SetFailure(ex.Message);
+        }
+
+        await Task.CompletedTask;
+        return report;
+    }
+
     public async Task<SXReport> ExecuteCustomFunctionAsync(String functionName, SXTask task, CancellationToken cancellationToken = default)
     {
         if (_functions.TryGetValue(functionName, out Func<SXTask, CancellationToken, Task<SXReport>>? func))
@@ -278,6 +371,7 @@ public sealed class WorkflowEngine : IAsyncDisposable
         if (!_disposed)
         {
             _predictor.Dispose();
+            _isolationService.Dispose();
             await _linker.DisposeAsync();
             _disposed = true;
         }

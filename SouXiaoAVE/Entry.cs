@@ -6,7 +6,7 @@ using SouXiaoAVE.Services;
 
 namespace SouXiaoAVE;
 
-public class Program
+public sealed class Entry
 {
     public static async Task Main(String[] args)
     {

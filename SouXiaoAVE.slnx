@@ -1,6 +1,5 @@
 <Solution>
   <Project Path="SXAVELinker/SXAVELinker.csproj" />
-  <Project Path="FeatureExtractor/FeatureExtractor.csproj" />
   <Project Path="SouXiaoAVE/SouXiaoAVE.csproj" />
-  <Project Path="Example/Example.csproj" />
+  <Project Path="ZeroZone/ZeroZone.csproj" />
 </Solution>
