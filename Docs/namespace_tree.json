@@ -1,0 +1,203 @@
+{
+  "root": {
+    "name": "SouXiaoAVE",
+    "type": "Solution",
+    "children": [
+      {
+        "name": "SXAVELinker",
+        "type": "Namespace",
+        "assembly": "SXAVELinker.dll",
+        "description": "Core workflow engine library with type definitions and task scheduling",
+        "children": [
+          {
+            "name": "SXType",
+            "type": "Enum",
+            "file": "SXType.cs",
+            "description": "Data type enumeration defining supported data types"
+          },
+          {
+            "name": "SXData",
+            "type": "Class",
+            "file": "SXData.cs",
+            "description": "Byte data container with compression support and file path reference",
+            "implements": ["IDisposable"]
+          },
+          {
+            "name": "SXTaskID",
+            "type": "Class",
+            "file": "SXTaskID.cs",
+            "description": "Unique task identifier with GUID, source and timestamp"
+          },
+          {
+            "name": "SXReport",
+            "type": "Class",
+            "file": "SXReport.cs",
+            "description": "Task execution report with results, timing and error info"
+          },
+          {
+            "name": "SXTask",
+            "type": "Class",
+            "file": "SXTask.cs",
+            "description": "Executable task unit with dependency management and async execution"
+          },
+          {
+            "name": "SXObject",
+            "type": "Class",
+            "file": "SXObject.cs",
+            "description": "Hierarchical object container with tree structure and metadata"
+          },
+          {
+            "name": "SXLinker",
+            "type": "Class",
+            "file": "SXLinker.cs",
+            "description": "Core workflow engine managing task registration and execution",
+            "implements": ["IAsyncDisposable"]
+          }
+        ]
+      },
+      {
+        "name": "SouXiaoAVE",
+        "type": "Namespace",
+        "assembly": "SouXiaoAVE.dll",
+        "description": "TCP service and PE analysis service main program",
+        "children": [
+          {
+            "name": "Program",
+            "type": "Class",
+            "file": "Program.cs",
+            "description": "Application entry point supporting CLI analysis and service mode"
+          },
+          {
+            "name": "Worker",
+            "type": "Class",
+            "file": "Worker.cs",
+            "description": "Background service worker managing TCP server and message handling",
+            "inherits": "BackgroundService"
+          },
+          {
+            "name": "Models",
+            "type": "Namespace",
+            "children": [
+              {
+                "name": "FeatureVector",
+                "type": "Class",
+                "file": "Models/FeatureVector.cs",
+                "description": "512-dimensional feature vector container"
+              }
+            ]
+          },
+          {
+            "name": "Services",
+            "type": "Namespace",
+            "children": [
+              {
+                "name": "TcpServer",
+                "type": "Class",
+                "file": "Services/TcpServer.cs",
+                "description": "TCP server with multi-client support and message broadcasting",
+                "implements": ["IAsyncDisposable"]
+              },
+              {
+                "name": "WorkflowEngine",
+                "type": "Class",
+                "file": "Services/WorkflowEngine.cs",
+                "description": "Workflow engine wrapper integrating PE analysis and malware detection",
+                "implements": ["IAsyncDisposable"]
+              },
+              {
+                "name": "LightGbmPredictor",
+                "type": "Class",
+                "file": "Services/LightGbmPredictor.cs",
+                "description": "LightGBM model predictor using P/Invoke for native library",
+                "implements": ["IDisposable"]
+              },
+              {
+                "name": "PeFeatureExtractor",
+                "type": "Class",
+                "file": "Services/PeFeatureExtractor.cs",
+                "description": "PE file feature extractor generating 512-dimensional features"
+              },
+              {
+                "name": "AnalysisReportContext",
+                "type": "Class",
+                "file": "Services/AnalysisReportContext.cs",
+                "description": "AOT-compatible JSON serialization context",
+                "inherits": "JsonSerializerContext"
+              },
+              {
+                "name": "AnalysisReport",
+                "type": "Class",
+                "file": "Services/AnalysisReportContext.cs",
+                "description": "Analysis report data model"
+              }
+            ]
+          },
+          {
+            "name": "Utils",
+            "type": "Namespace",
+            "children": [
+              {
+                "name": "EntropyCalculator",
+                "type": "StaticClass",
+                "file": "Utils/EntropyCalculator.cs",
+                "description": "Information entropy calculation utility"
+              },
+              {
+                "name": "MurmurHash3",
+                "type": "StaticClass",
+                "file": "Utils/MurmurHash3.cs",
+                "description": "MurmurHash3 hash algorithm implementation"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "FeatureExtractor",
+        "type": "Namespace",
+        "assembly": "FeatureExtractor.dll",
+        "description": "Batch feature extraction tool supporting directories and archives",
+        "children": [
+          {
+            "name": "Program",
+            "type": "Class",
+            "file": "Program.cs",
+            "description": "Feature extraction tool with multi-threading support"
+          },
+          {
+            "name": "ProcessingStats",
+            "type": "Class",
+            "file": "Program.cs",
+            "description": "Statistics for extraction processing"
+          },
+          {
+            "name": "CleanStats",
+            "type": "Class",
+            "file": "Program.cs",
+            "description": "Statistics for archive cleaning"
+          },
+          {
+            "name": "ArchiveEntryData",
+            "type": "Class",
+            "file": "Program.cs",
+            "description": "Archive entry data container"
+          }
+        ]
+      },
+      {
+        "name": "Example",
+        "type": "Namespace",
+        "assembly": "Example.dll",
+        "description": "SXAVELinker usage example project",
+        "children": [
+          {
+            "name": "Program",
+            "type": "Class",
+            "file": "Program.cs",
+            "description": "Example program demonstrating workflow creation and execution"
+          }
+        ]
+      }
+    ]
+  }
+}

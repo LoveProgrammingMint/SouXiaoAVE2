@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/Docs/.vitepress
+/CODING_STANDARDS.md
+/Plan.txt
+/NOTES.md
